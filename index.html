@@ -8,6 +8,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Bengali:wght@400;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/css/style.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0b3d20">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
 <script type="importmap">
 {
   "imports": {
@@ -32,6 +35,7 @@
   <!-- ============ HOME ============ -->
   <section id="screen-home" class="screen">
     <h2>খেলা শুরু করুন</h2>
+    <div class="invite-hint" id="inviteHint" hidden></div>
     <label for="nameInput">আপনার নাম</label>
     <input type="text" id="nameInput" placeholder="যেমন: শাকিব" maxlength="20" autocomplete="off">
 
@@ -64,6 +68,7 @@
     <p>রুম কোড — বন্ধুদের এই কোডটি দিন:</p>
     <div class="code-big" id="roomCodeBig">————</div>
     <button class="btn small" id="btnCopyCode">কোড কপি করুন</button>
+    <button class="btn small secondary" id="btnCopyLink">🔗 লিংক কপি করুন</button>
     <ul class="player-list" id="lobbyPlayers"></ul>
     <p class="hint" id="lobbyNote">৩–৪ জন হলে খেলা শুরু করা যাবে।</p>
     <button class="btn" id="btnStart" disabled>খেলা শুরু করুন</button>

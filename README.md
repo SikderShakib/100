@@ -9,6 +9,9 @@ Rules: `../custom-cards/game-rules.md`. Build plan: `../custom-cards/game-build-
 - `assets/js/cards.js` — fixed card table (top = 5×n, bottom = n, egg 0/0) + pure game logic
   (incl. series scoring: `seriesDelta`, `seriesWinnerId`).
 - `assets/js/app.js` — Firestore rooms, dealing, tricks, scoring, series totals, Boyz Chat.
+- `manifest.json` + `sw.js` + `icons/` — PWA install (Add to Home Screen). **Bump the
+  `sw.js` cache name on every deploy that changes a served file**, or phones stay
+  stuck on the old code.
 - `assets/js/firebase-config.js` — real config, project "100 Cards" (cards-729e0).
 - `assets/cards/` — the 21 finished card PNGs (same v3 files as in Canva).
 
@@ -60,6 +63,10 @@ Rules: `../custom-cards/game-rules.md`. Build plan: `../custom-cards/game-build-
 7. Boyz Chat: during play, any player can send a text message from the table
    screen (max 200 characters); it appears for everyone in the room live
    (last 20 kept). No extra Firebase setup.
+8. Invite link: the lobby has a "লিংক কপি করুন" button — the link opens the game
+   with the room code pre-filled (`?room=CODE`). PWA: the game is installable
+   (manifest.json + sw.js + icons) — Chrome → Add to Home Screen; the service
+   worker caches the shell, but the game itself still needs internet to play.
 
 ## Known limits (v1)
 - No login/accounts — anyone with the room code can join.

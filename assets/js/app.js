@@ -660,9 +660,31 @@ function renderResult() {
 // ---------- wire up ----------
 $('btnCreate').addEventListener('click', () => { createRoom().catch((e) => { console.error(e); toast('রুম তৈরি হয়নি।'); }); });
 $('btnJoin').addEventListener('click', () => { joinRoom().catch((e) => { console.error(e); toast('যোগ দেওয়া যায়নি।'); }); });
+function inviteUrl() {
+  return location.origin + location.pathname + '?room=' + roomCode;
+}
+
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove(); return ok;
+    } catch { return false; }
+  }
+}
+
 $('btnCopyCode').addEventListener('click', async () => {
-  try { await navigator.clipboard.writeText(roomCode); toast('কোড কপি হয়েছে: ' + roomCode); }
-  catch { toast('কোড: ' + roomCode); }
+  if (await copyText(roomCode)) toast('কোড কপি হয়েছে: ' + roomCode);
+  else toast('কোড: ' + roomCode);
+});
+$('btnCopyLink').addEventListener('click', async () => {
+  const url = inviteUrl();
+  if (await copyText(url)) toast('লিংক কপি হয়েছে — বন্ধুদের পাঠান।');
+  else toast('লিংক: ' + url);
 });
 $('btnStart').addEventListener('click', () => { startGame().catch((e) => { console.error(e); toast('খেলা শুরু হয়নি।'); }); });
 $('btnLeaveLobby').addEventListener('click', leaveToHome);
@@ -679,6 +701,22 @@ if (!CONFIGURED) {
 }
 const savedName = localStorage.getItem('c100-name');
 if (savedName) $('nameInput').value = savedName;
+
+// Invite link: ?room=ABCD pre-fills the join code.
+const inviteCode = (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z]/g, '');
+if (inviteCode.length === 4) {
+  $('codeInput').value = inviteCode;
+  const hint = $('inviteHint');
+  hint.textContent = 'রুম ' + inviteCode + '-এ আমন্ত্রণ পেয়েছেন — নাম লিখে "রুমে যোগ দিন" চাপুন।';
+  hint.hidden = false;
+}
+
+// PWA: register the service worker (installable like OTW).
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
 
 const saved = JSON.parse(sessionStorage.getItem('c100') || 'null');
 if (saved && saved.code && saved.id && CONFIGURED) {
