@@ -75,6 +75,29 @@ export function computeResults(players) {
   return { rows, winnerId: winner.id };
 }
 
+/** Series (running-total) scoring across matches in one room.
+ *  A player who met their target adds their match score to their total;
+ *  a player who missed it loses their TARGET from their total.
+ *  Totals may go negative. */
+export function seriesDelta(target, score) {
+  const met = target != null && score >= target;
+  return met ? score : -(target ?? 0);
+}
+
+/** Series winner: the player whose total reaches the series target.
+ *  Highest total wins; a tie is broken by the higher match score. */
+export function seriesWinnerId(totals, seriesTarget, matchScores = {}) {
+  let best = null;
+  for (const [id, total] of Object.entries(totals || {})) {
+    if (total < seriesTarget) continue;
+    const score = matchScores[id] ?? 0;
+    if (!best || total > best.total || (total === best.total && score > best.score)) {
+      best = { id, total, score };
+    }
+  }
+  return best ? best.id : null;
+}
+
 /** English digits -> Bengali digits, for on-screen numbers. */
 export function bn(n) {
   if (n === null || n === undefined) return '—';

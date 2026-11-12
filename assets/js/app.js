@@ -9,7 +9,8 @@ import {
 } from 'firebase/firestore';
 import { firebaseConfig } from './firebase-config.js';
 import {
-  CARD_BY_ID, deckFor, shuffleDeck, deal, trickWinner, scoreOf, computeResults, bn,
+  CARD_BY_ID, deckFor, shuffleDeck, deal, trickWinner, scoreOf, computeResults,
+  seriesDelta, seriesWinnerId, bn,
 } from './cards.js';
 
 // ---------- setup ----------
@@ -96,6 +97,10 @@ async function createRoom() {
       round: 1,
       roundsTotal: 0,
       winnerId: null,
+      matchNo: 1,
+      totals: {},
+      seriesTarget: 1000,
+      seriesWinnerId: null,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -273,10 +278,21 @@ async function resolveTrick() {
             : [...(r.players[pid].won || [])],
         }));
         const { winnerId: finalWinner } = computeResults(finalPlayers);
+        // Series totals: met target -> +match score, missed -> -target.
+        const totals = { ...(r.totals || {}) };
+        const matchScores = {};
+        for (const fp of finalPlayers) {
+          const sc = scoreOf(fp.won || []);
+          matchScores[fp.id] = sc;
+          totals[fp.id] = (totals[fp.id] ?? 0) + seriesDelta(fp.target, sc);
+        }
+        const seriesWinner = seriesWinnerId(totals, r.seriesTarget ?? 1000, matchScores);
         updates.status = 'done';
         updates.currentTrick = [];
         updates.turn = null;
         updates.winnerId = finalWinner;
+        updates.totals = totals;
+        updates.seriesWinnerId = seriesWinner;
       } else {
         updates.currentTrick = [];
         updates.leader = winnerId;
@@ -299,6 +315,11 @@ async function playAgain() {
   for (const pid of room.order) {
     resetPlayers[pid] = { ...room.players[pid], target: null, won: [] };
   }
+  // Series over -> fresh series (totals back to 0, match 1).
+  // Otherwise -> next match, totals carry over.
+  const seriesOver = !!room.seriesWinnerId;
+  const totals = {};
+  for (const pid of room.order) totals[pid] = seriesOver ? 0 : ((room.totals || {})[pid] ?? 0);
   await updateDoc(roomRef(), {
     status: 'lobby',
     players: resetPlayers,
@@ -309,9 +330,12 @@ async function playAgain() {
     round: 1,
     roundsTotal: 0,
     winnerId: null,
+    matchNo: seriesOver ? 1 : (room.matchNo || 1) + 1,
+    totals,
+    seriesWinnerId: null,
     updatedAt: serverTimestamp(),
   });
-  toast('নতুন খেলার জন্য লবিতে ফিরে গেলেন।');
+  toast(seriesOver ? 'নতুন সিরিজ শুরু হচ্ছে।' : 'পরের ম্যাচের জন্য লবিতে ফিরে গেলেন।');
 }
 
 // ---------- rendering ----------
@@ -426,6 +450,8 @@ function renderTable() {
     b.textContent = 'স্কোর ' + bn(scoreOf(p.won || []));
     sc.appendChild(b);
     sc.appendChild(document.createTextNode(' • দান ' + bn(tricks)));
+    const seriesTotal = (room.totals || {})[pid] ?? 0;
+    sc.appendChild(document.createTextNode(' • সিরিজ ' + bn(seriesTotal)));
     chip.appendChild(nm);
     chip.appendChild(sc);
     bar.appendChild(chip);
@@ -446,7 +472,9 @@ function renderTable() {
   }
   $('turnSub').textContent =
     'লিডার: ' + playerName(room.leader) +
-    ' • রাউন্ড ' + bn(room.round) + '/' + bn(room.roundsTotal);
+    ' • রাউন্ড ' + bn(room.round) + '/' + bn(room.roundsTotal) +
+    ' • ম্যাচ ' + bn(room.matchNo || 1) +
+    ' • সিরিজ টার্গেট ' + bn(room.seriesTarget ?? 1000);
 
   // Centre: played cards of this trick + empty slots for those yet to play.
   const area = $('trickArea');
@@ -522,13 +550,45 @@ function renderResult() {
     tr.append(tdName, tdTarget, tdScore, tdMet);
     body.appendChild(tr);
   }
+  // Series box: running totals + series winner (if the series is over).
+  const seriesOver = !!room.seriesWinnerId;
+  const totals = room.totals || {};
+  $('seriesBox').hidden = false;
+  $('seriesMatchNo').textContent = '— ম্যাচ ' + bn(room.matchNo || 1);
+  const swLine = $('seriesWinnerLine');
+  if (seriesOver && room.seriesWinnerId) {
+    swLine.hidden = false;
+    swLine.textContent = '🏆 সিরিজ জিতেছেন ' + playerName(room.seriesWinnerId) +
+      ' — মোট স্কোর ' + bn(totals[room.seriesWinnerId] ?? 0);
+  } else {
+    swLine.hidden = true;
+    swLine.textContent = '';
+  }
+  const sBody = $('seriesBody');
+  sBody.innerHTML = '';
+  const sRows = room.order.map((pid) => {
+    const p = room.players[pid];
+    const score = scoreOf(p.won || []);
+    return { id: pid, name: p.name, score, target: p.target, met: p.target != null && score >= p.target, total: totals[pid] ?? 0 };
+  });
+  sRows.sort((a, b) => b.total - a.total);
+  for (const r of sRows) {
+    const tr = document.createElement('tr');
+    if (r.id === room.seriesWinnerId) tr.className = 'winner-row';
+    const tdName = document.createElement('td'); tdName.textContent = r.name;
+    const tdScore = document.createElement('td'); tdScore.textContent = bn(r.score);
+    const tdTarget = document.createElement('td'); tdTarget.textContent = bn(r.target) + (r.met ? ' ✓' : ' ✗');
+    const tdTotal = document.createElement('td'); tdTotal.textContent = bn(r.total);
+    tr.append(tdName, tdScore, tdTarget, tdTotal);
+    sBody.appendChild(tr);
+  }
   const again = $('btnAgain');
   if (isHost) {
     again.disabled = false;
-    again.textContent = 'আবার খেলুন (একই রুমে)';
+    again.textContent = seriesOver ? 'নতুন সিরিজ শুরু করুন' : 'পরের ম্যাচ খেলুন (একই রুমে)';
   } else {
     again.disabled = true;
-    again.textContent = 'হোস্ট আবার খেলার বোতাম চাপবেন…';
+    again.textContent = seriesOver ? 'হোস্ট নতুন সিরিজ শুরু করবেন…' : 'হোস্ট পরের ম্যাচ শুরু করবেন…';
   }
 }
 

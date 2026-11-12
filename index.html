@@ -51,6 +51,8 @@
         <li>প্রতি দানে সবাই একটা করে কার্ড খেলবে — যার <b>উপরের নম্বর বড়</b>, সে দান জিতবে।</li>
         <li>দান জিতলে সে-ই আবার চালবে, তারপর তার পাশের জন থেকে শুরু।</li>
         <li>খেলা শেষে জেতা কার্ডের <b>নিচের নম্বরগুলোর যোগফল</b> = স্কোর। স্কোর টার্গেটে পৌঁছালে শো হবে।</li>
+        <li>সিরিজ: টার্গেট পূরণ করলে ম্যাচের স্কোর মোট স্কোরে যোগ হবে; না পারলে টার্গেটটাই মোট স্কোর থেকে বিয়োগ যাবে।</li>
+        <li>মোট স্কোর <b>১০০০</b>-এ যে সবার আগে পৌঁছাবে, সে সিরিজ জিতবে — তারপর নতুন সিরিজ শুরু।</li>
         <li>ডিম কার্ড (০/০) কখনো দান জিতবে না, স্কোরে ০ যোগ করবে।</li>
       </ol>
     </details>
@@ -106,6 +108,14 @@
       <thead><tr><th>খেলোয়াড়</th><th>টার্গেট</th><th>স্কোর</th><th>শো</th></tr></thead>
       <tbody id="resultBody"></tbody>
     </table>
+    <div class="series-box" id="seriesBox" hidden>
+      <h3>সিরিজ স্কোর <span id="seriesMatchNo"></span></h3>
+      <div class="series-winner" id="seriesWinnerLine" hidden></div>
+      <table class="result">
+        <thead><tr><th>খেলোয়াড়</th><th>ম্যাচ স্কোর</th><th>টার্গেট</th><th>মোট স্কোর</th></tr></thead>
+        <tbody id="seriesBody"></tbody>
+      </table>
+    </div>
     <button class="btn" id="btnAgain">আবার খেলুন (একই রুমে)</button>
     <button class="btn secondary" id="btnNewRoom">নতুন রুম</button>
   </section>

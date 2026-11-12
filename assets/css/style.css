@@ -129,6 +129,12 @@ table.result th, table.result td { padding: 9px 6px; text-align: center;
 table.result th { color: var(--gold-soft); font-size: 16px; }
 table.result tr.winner-row td { font-weight: 800; color: var(--gold-soft); }
 
+/* Series box on the result screen */
+.series-box { margin-top: 14px; }
+.series-box h3 { margin: 4px 0 8px; font-size: 18px; color: var(--gold-soft); text-align: center; }
+.series-winner { text-align: center; background: var(--gold); color: #231a02;
+  border-radius: 12px; padding: 10px; font-size: 18px; font-weight: 800; margin-bottom: 10px; }
+
 .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
   background: #111827; color: #fff; border: 1px solid var(--gold);
   padding: 12px 18px; border-radius: 12px; font-size: 17px; z-index: 50;
