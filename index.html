@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>১০০ কার্ড — অনলাইন কার্ড গেম</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Bengali:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/style.css">
+<script type="importmap">
+{
+  "imports": {
+    "firebase/app": "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js",
+    "firebase/firestore": "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js"
+  }
+}
+</script>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>১০০ কার্ড</h1>
+    <p class="sub">অনলাইন কার্ড গেম — ৩/৪ জন</p>
+  </header>
+
+  <div id="cfgWarn" class="warn" hidden>
+    ⚠️ Firebase কনফিগ এখনো বসানো হয়নি। গেম খেলতে <b>assets/js/firebase-config.js</b>-এ
+    Firebase প্রজেক্টের আসল config বসাতে হবে। বিস্তারিত README.md-এ দেখুন।
+  </div>
+
+  <!-- ============ HOME ============ -->
+  <section id="screen-home" class="screen">
+    <h2>খেলা শুরু করুন</h2>
+    <label for="nameInput">আপনার নাম</label>
+    <input type="text" id="nameInput" placeholder="যেমন: শাকিব" maxlength="20" autocomplete="off">
+
+    <button class="btn" id="btnCreate">নতুন রুম তৈরি করুন</button>
+
+    <label for="codeInput">রুম কোড (যোগ দিতে)</label>
+    <input type="text" id="codeInput" placeholder="যেমন: ABCD" maxlength="4" autocomplete="off">
+    <button class="btn secondary" id="btnJoin">রুমে যোগ দিন</button>
+    <div class="error" id="homeError"></div>
+
+    <details class="rules">
+      <summary>খেলার নিয়ম</summary>
+      <ol>
+        <li>৪ জন খেললে ২০টা কার্ড (জনপ্রতি ৫টা), ৩ জন খেললে ২১টা কার্ড — ডিম কার্ড সহ (জনপ্রতি ৭টা)।</li>
+        <li>কার্ড দেখার পর প্রত্যেকে নিজের টার্গেট লিখবে — ২০ থেকে ১৬০-এর মধ্যে।</li>
+        <li>ড্রাইভার কার্ড যার কাছে, সে প্রথমে চালবে।</li>
+        <li>প্রতি দানে সবাই একটা করে কার্ড খেলবে — যার <b>উপরের নম্বর বড়</b>, সে দান জিতবে।</li>
+        <li>দান জিতলে সে-ই আবার চালবে, তারপর তার পাশের জন থেকে শুরু।</li>
+        <li>খেলা শেষে জেতা কার্ডের <b>নিচের নম্বরগুলোর যোগফল</b> = স্কোর। স্কোর টার্গেটে পৌঁছালে শো হবে।</li>
+        <li>ডিম কার্ড (০/০) কখনো দান জিতবে না, স্কোরে ০ যোগ করবে।</li>
+      </ol>
+    </details>
+  </section>
+
+  <!-- ============ LOBBY ============ -->
+  <section id="screen-lobby" class="screen" hidden>
+    <h2>লবি</h2>
+    <p>রুম কোড — বন্ধুদের এই কোডটি দিন:</p>
+    <div class="code-big" id="roomCodeBig">————</div>
+    <button class="btn small" id="btnCopyCode">কোড কপি করুন</button>
+    <ul class="player-list" id="lobbyPlayers"></ul>
+    <p class="hint" id="lobbyNote">৩–৪ জন হলে খেলা শুরু করা যাবে।</p>
+    <button class="btn" id="btnStart" disabled>খেলা শুরু করুন</button>
+    <button class="btn secondary" id="btnLeaveLobby">রুম ছেড়ে যান</button>
+  </section>
+
+  <!-- ============ TARGET ============ -->
+  <section id="screen-target" class="screen" hidden>
+    <h2>আপনার কার্ড ও টার্গেট</h2>
+    <p>আপনার কার্ডগুলো দেখে টার্গেট লিখুন (২০–১৬০)। টার্গেট = আপনি কত স্কোর করবেন বলে ভাবছেন।</p>
+    <div class="fan readonly small" id="targetHand"></div>
+    <label for="targetInput">আপনার টার্গেট (২০–১৬০)</label>
+    <input type="number" id="targetInput" min="20" max="160" placeholder="যেমন: ৫০" inputmode="numeric">
+    <button class="btn" id="btnTarget">টার্গেট জমা দিন</button>
+    <div class="error" id="targetError"></div>
+    <ul class="player-list" id="targetStatus"></ul>
+  </section>
+
+  <!-- ============ TABLE ============ -->
+  <section id="screen-table" class="screen" hidden>
+    <div class="topbar" id="topBar"></div>
+    <div class="turn-banner" id="turnBanner">অপেক্ষা করুন…</div>
+    <p class="turn-sub" id="turnSub"></p>
+    <div class="trick-area" id="trickArea"></div>
+    <div class="hand-zone">
+      <h3>আপনার হাতের কার্ড</h3>
+      <div class="fan" id="myHand"></div>
+      <div class="play-row">
+        <button class="btn" id="btnPlay" disabled>এই কার্ডটি খেলুন</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ RESULT ============ -->
+  <section id="screen-result" class="screen" hidden>
+    <div class="winner-banner">
+      <div>🏆 বিজয়ী</div>
+      <div class="win-name" id="winnerName">—</div>
+      <div class="win-score" id="winnerScore">—</div>
+    </div>
+    <table class="result">
+      <thead><tr><th>খেলোয়াড়</th><th>টার্গেট</th><th>স্কোর</th><th>শো</th></tr></thead>
+      <tbody id="resultBody"></tbody>
+    </table>
+    <button class="btn" id="btnAgain">আবার খেলুন (একই রুমে)</button>
+    <button class="btn secondary" id="btnNewRoom">নতুন রুম</button>
+  </section>
+
+  <div id="toast" class="toast" hidden></div>
+</div>
+<script type="module" src="assets/js/app.js"></script>
+</body>
+</html>
