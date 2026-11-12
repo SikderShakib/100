@@ -111,6 +111,7 @@ details.rules ol { padding-left: 20px; margin: 8px 0; }
 .fan .card.selected { transform: rotate(var(--r, 0deg)) translateY(-22px);
   outline: 3px solid var(--gold-soft); border-radius: 9px; }
 .fan .card.playable:hover { transform: rotate(var(--r, 0deg)) translateY(-10px); }
+.fan .card.disabled { opacity: 0.45; filter: grayscale(0.5); cursor: not-allowed; }
 .fan.readonly .card { cursor: default; }
 .fan.small .card { width: 76px; margin-left: -26px; }
 .fan.small { min-height: 160px; padding-top: 18px; }

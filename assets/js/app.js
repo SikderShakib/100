@@ -215,9 +215,20 @@ function nextPlayerId(afterId) {
   return room.order[(i + 1) % room.order.length];
 }
 
+/** The opening play of the game: round 1 with an empty trick.
+ *  It must be the Driver card (c01) — no other card may open the game. */
+function isOpeningPlay() {
+  return room && room.status === 'playing' && room.round === 1 &&
+    (!room.currentTrick || room.currentTrick.length === 0);
+}
+
 async function playCard(cardId) {
   if (!room || room.status !== 'playing' || room.turn !== myId || playing) return;
   if (!(room.hands[myId] || []).includes(cardId)) return;
+  if (isOpeningPlay() && cardId !== 'c01') {
+    toast('খেলা ড্রাইভার কার্ড দিয়েই শুরু করতে হবে।');
+    return;
+  }
   playing = true;
   try {
     await updateDoc(roomRef(), {
@@ -349,13 +360,17 @@ function renderFan(container, cardIds, opts = {}) {
   sorted.forEach((cid, i) => {
     const angle = n > 1 ? (i - (n - 1) / 2) * 11 : 0;
     const el = document.createElement('div');
-    el.className = 'card' + (opts.playable ? ' playable' : '') + (opts.selected === cid ? ' selected' : '');
+    const isDisabled = opts.disabled && opts.disabled.includes(cid);
+    el.className = 'card' + (opts.playable ? ' playable' : '') + (opts.selected === cid ? ' selected' : '') + (isDisabled ? ' disabled' : '');
     el.style.setProperty('--r', angle + 'deg');
     const img = document.createElement('img');
     img.src = 'assets/cards/' + CARD_BY_ID[cid].file;
     img.alt = CARD_BY_ID[cid].top + '/' + CARD_BY_ID[cid].bottom;
     el.appendChild(img);
-    if (opts.onSelect) el.addEventListener('click', () => opts.onSelect(cid));
+    if (opts.onSelect) el.addEventListener('click', () => {
+      if (isDisabled) { toast('খেলা ড্রাইভার কার্ড দিয়েই শুরু করতে হবে।'); return; }
+      opts.onSelect(cid);
+    });
     container.appendChild(el);
   });
 }
@@ -417,11 +432,16 @@ function renderTable() {
   }
 
   const banner = $('turnBanner');
+  const opening = isOpeningPlay();
   if (room.turn === myId) {
-    banner.textContent = 'আপনার পালা — একটি কার্ড খেলুন';
+    banner.textContent = opening
+      ? 'আপনার পালা — ড্রাইভার কার্ড দিয়েই খেলা শুরু করুন'
+      : 'আপনার পালা — একটি কার্ড খেলুন';
     banner.classList.add('my-turn');
   } else {
-    banner.textContent = playerName(room.turn) + '-এর পালা';
+    banner.textContent = opening
+      ? playerName(room.turn) + ' ড্রাইভার কার্ড দিয়ে খেলা শুরু করবেন'
+      : playerName(room.turn) + '-এর পালা';
     banner.classList.remove('my-turn');
   }
   $('turnSub').textContent =
@@ -463,6 +483,7 @@ function renderTable() {
   const myHand = room.hands[myId] || [];
   renderFan($('myHand'), myHand, {
     playable: room.turn === myId,
+    disabled: isOpeningPlay() ? myHand.filter((c) => c !== 'c01') : [],
     selected: selectedCard,
     onSelect: (cid) => {
       if (room.turn !== myId) { toast('এখন আপনার পালা নয়।'); return; }
