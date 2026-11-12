@@ -6,8 +6,10 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
   getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot,
   arrayUnion, arrayRemove, serverTimestamp, runTransaction,
+  collection, query, orderBy, limit, getDocs, writeBatch,
 } from 'firebase/firestore';
 import { firebaseConfig } from './firebase-config.js';
+import { startVoiceRecording, stopVoiceRecording, isRecording, voiceSupported } from './voice.js';
 import {
   CARD_BY_ID, deckFor, shuffleDeck, deal, trickWinner, scoreOf, computeResults,
   seriesDelta, seriesWinnerId, bn,
@@ -169,10 +171,13 @@ function attachListener() {
     console.error('room listener error', err);
     toast('সংযোগে সমস্যা হয়েছে।');
   });
+  attachVoiceListener();
 }
 
 function leaveToHome() {
   if (unsub) { unsub(); unsub = null; }
+  if (unsubVoice) { unsubVoice(); unsubVoice = null; }
+  voiceMsgs = [];
   clearSession();
   room = null; roomCode = null; myId = null; isHost = false; selectedCard = null;
   showScreen('home');
@@ -306,6 +311,120 @@ async function resolveTrick() {
     console.error('resolve failed', e);
   }
   resolving = false;
+}
+
+// ---------- Boyz Chat: voice messages ----------
+let recTimer = null;
+let recStartedAt = 0;
+const VOICE_MAX_SEC = 30;
+const CHAT_KEEP = 20;
+
+function fmtDur(s) {
+  const n = s || 0;
+  return bn(Math.floor(n / 60)) + ':' + String(n % 60).padStart(2, '0');
+}
+
+function updateRecTimer() {
+  const s = Math.floor((Date.now() - recStartedAt) / 1000);
+  $('recTimer').textContent = '● ' + fmtDur(s) + ' / ' + fmtDur(VOICE_MAX_SEC);
+}
+
+async function onRecordClick() {
+  if (!room || !roomCode) return;
+  if (isRecording()) { await finishRecording(); return; }
+  if (!voiceSupported()) { toast('এই ব্রাউজারে ভয়েস রেকর্ড চলে না।'); return; }
+  try {
+    await startVoiceRecording();
+    recStartedAt = Date.now();
+    $('btnRecord').textContent = '⏹️ থামান ও পাঠান';
+    $('btnRecord').classList.add('recording');
+    updateRecTimer();
+    recTimer = setInterval(updateRecTimer, 500);
+    setTimeout(() => { if (isRecording()) finishRecording(); }, VOICE_MAX_SEC * 1000);
+  } catch (e) {
+    console.error('mic error', e);
+    toast('মাইকের অনুমতি দিন — ব্রাউজার থেকে মাইক চালু করুন।');
+  }
+}
+
+async function finishRecording() {
+  clearInterval(recTimer);
+  recTimer = null;
+  $('btnRecord').textContent = '🎙️ ভয়েস মেসেজ';
+  $('btnRecord').classList.remove('recording');
+  $('recTimer').textContent = '';
+  const res = await stopVoiceRecording();
+  if (!res || !res.blob || res.blob.size === 0) { toast('রেকর্ড হয়নি, আবার চেষ্টা করুন।'); return; }
+  try {
+    const dataUrl = await blobToDataUrl(res.blob);
+    const msgId = 'v_' + Math.random().toString(36).slice(2, 10);
+    const msg = { id: msgId, playerId: myId, name: myName, data: dataUrl, mime: res.blob.type || 'audio/webm', dur: res.durSec, createdAt: Date.now() };
+    await setDoc(doc(db, 'rooms', roomCode, 'voice', msgId), msg);
+    pruneVoiceMsgs().catch(() => {});
+  } catch (e) {
+    console.error('voice send failed', e);
+    toast('ভয়েস পাঠানো যায়নি, আবার চেষ্টা করুন।');
+  }
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = () => reject(new Error('read failed'));
+    r.readAsDataURL(blob);
+  });
+}
+
+/** Best-effort cleanup: keep only the newest 20 voice messages in the room. */
+async function pruneVoiceMsgs() {
+  const snap = await getDocs(query(collection(db, 'rooms', roomCode, 'voice'), orderBy('createdAt', 'desc'), limit(100)));
+  if (snap.size <= CHAT_KEEP) return;
+  const batch = writeBatch(db);
+  snap.docs.slice(CHAT_KEEP).forEach((d) => batch.delete(d.ref));
+  await batch.commit();
+}
+
+let voiceMsgs = [];
+let unsubVoice = null;
+
+function attachVoiceListener() {
+  if (unsubVoice) unsubVoice();
+  const q = query(collection(db, 'rooms', roomCode, 'voice'), orderBy('createdAt', 'desc'), limit(CHAT_KEEP));
+  unsubVoice = onSnapshot(q, (snap) => {
+    voiceMsgs = snap.docs.map((d) => d.data()).reverse();
+    renderChat();
+  }, (err) => {
+    console.error('voice listener error', err);
+  });
+}
+
+function renderChat() {
+  const list = $('chatList');
+  if (!list) return;
+  const msgs = voiceMsgs.slice(-CHAT_KEEP);
+  list.innerHTML = '';
+  if (!msgs.length) {
+    const d = document.createElement('div');
+    d.className = 'chat-empty';
+    d.textContent = 'এখনো কোনো ভয়েস মেসেজ নেই — প্রথম মেসেজটি পাঠান!';
+    list.appendChild(d);
+    return;
+  }
+  for (const m of msgs) {
+    const item = document.createElement('div');
+    item.className = 'chat-item' + (m.playerId === myId ? ' mine' : '');
+    const nm = document.createElement('div');
+    nm.className = 'chat-name';
+    nm.textContent = (m.name || '?') + (m.playerId === myId ? ' (আপনি)' : '') + ' • ' + fmtDur(m.dur);
+    const audio = document.createElement('audio');
+    audio.controls = true;
+    audio.preload = 'none';
+    audio.src = m.data;
+    item.appendChild(nm);
+    item.appendChild(audio);
+    list.appendChild(item);
+  }
 }
 
 // ---------- play again ----------
@@ -523,6 +642,8 @@ function renderTable() {
   const playBtn = $('btnPlay');
   playBtn.disabled = !(room.turn === myId && selectedCard && myHand.includes(selectedCard));
   playBtn.textContent = selectedCard ? 'এই কার্ডটি খেলুন' : 'একটি কার্ড বাছুন';
+
+  renderChat();
 }
 
 function renderResult() {
@@ -603,12 +724,17 @@ $('btnStart').addEventListener('click', () => { startGame().catch((e) => { conso
 $('btnLeaveLobby').addEventListener('click', leaveToHome);
 $('btnTarget').addEventListener('click', () => { submitTarget().catch((e) => { console.error(e); toast('টার্গেট জমা হয়নি।'); }); });
 $('btnPlay').addEventListener('click', () => { if (selectedCard) playCard(selectedCard); });
+$('btnRecord').addEventListener('click', () => { onRecordClick().catch((e) => { console.error(e); toast('রেকর্ড শুরু হয়নি।'); }); });
 $('btnAgain').addEventListener('click', () => { playAgain().catch((e) => { console.error(e); toast('আবার খেলা শুরু হয়নি।'); }); });
 $('btnNewRoom').addEventListener('click', leaveToHome);
 
 // ---------- boot ----------
 if (!CONFIGURED) {
   $('cfgWarn').hidden = false;
+}
+if (!voiceSupported()) {
+  $('btnRecord').disabled = true;
+  $('btnRecord').textContent = 'ভয়েস এই ব্রাউজারে চলে না';
 }
 const savedName = localStorage.getItem('c100-name');
 if (savedName) $('nameInput').value = savedName;
