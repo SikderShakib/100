@@ -1,4 +1,7 @@
-/* 100 Cards — mobile-first styles. Green felt table, ivory cards, big numbers. */
+/* 100 Cards — mobile-first styles. Green felt table, ivory cards, big numbers.
+   Responsive: phone (base) → tablet ≥700px → laptop ≥1024px.
+   Phone: single narrow column, fan scales to fit 7 cards.
+   Laptop: wide table, big cards, Boyz Chat beside the table. */
 * { box-sizing: border-box; }
 
 :root {
@@ -11,18 +14,26 @@
   --ivory: #fffdf5;
   --card-bg: #ffffff;
   --danger: #b91c1c;
+  --card-w: clamp(58px, 16vw, 92px);
+  --trick-w: clamp(56px, 17vw, 74px);
 }
 
 html, body { margin: 0; padding: 0; }
 
+html { -webkit-text-size-adjust: 100%; }
+
 body {
   font-family: "Noto Serif Bengali", "Hind Siliguri", serif;
   background: linear-gradient(180deg, var(--felt-dark), var(--felt) 40%, var(--felt-dark));
+  background-attachment: fixed;
   color: var(--ivory);
   min-height: 100vh;
+  overflow-x: hidden;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.app { max-width: 560px; margin: 0 auto; padding: 12px 12px 24px; }
+.app { max-width: 560px; margin: 0 auto; padding: 12px 12px calc(24px + env(safe-area-inset-bottom, 0px)); }
 
 header { text-align: center; margin: 6px 0 12px; }
 header h1 { margin: 0; font-size: 34px; letter-spacing: 1px; color: var(--gold-soft); }
@@ -73,12 +84,16 @@ details.rules ol { padding-left: 20px; margin: 8px 0; }
   padding: 2px 10px; font-weight: 700; }
 .tick { color: #86efac; font-weight: 700; }
 
+/* Table layout: phone = stacked; laptop = table + chat side by side */
+.table-layout { display: block; }
+.table-main { min-width: 0; }
+
 /* Top bar: name + target + score chips */
-.topbar { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.topbar { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
 .chip { flex: 0 0 auto; background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 12px; padding: 8px 10px; font-size: 15px; line-height: 1.4; min-width: 96px; }
 .chip.me { border-color: var(--gold-soft); box-shadow: 0 0 0 1px var(--gold-soft); }
-.chip .nm { font-weight: 700; font-size: 16px; }
+.chip .nm { font-weight: 700; font-size: 16px; overflow-wrap: anywhere; }
 .chip .sc { font-size: 14px; opacity: 0.95; }
 .chip .sc b { font-size: 17px; color: var(--gold-soft); }
 
@@ -90,22 +105,23 @@ details.rules ol { padding-left: 20px; margin: 8px 0; }
 /* Centre: played cards of the current trick */
 .trick-area { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;
   min-height: 150px; align-items: flex-start; padding: 10px 0; }
-.trick-slot { width: 74px; text-align: center; }
-.trick-slot img { width: 74px; border-radius: 8px; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45); }
-.trick-slot .who { font-size: 13px; margin-top: 3px; }
-.trick-slot.empty { width: 74px; height: 104px; border: 2px dashed rgba(255, 255, 255, 0.35);
+.trick-slot { width: var(--trick-w); text-align: center; }
+.trick-slot img { width: 100%; border-radius: 8px; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45); }
+.trick-slot .who { font-size: 13px; margin-top: 3px; overflow-wrap: anywhere; }
+.trick-slot.empty { width: var(--trick-w); height: calc(var(--trick-w) * 1.4); border: 2px dashed rgba(255, 255, 255, 0.35);
   border-radius: 8px; display: flex; align-items: center; justify-content: center;
-  font-size: 13px; opacity: 0.8; }
+  font-size: 13px; opacity: 0.8; padding: 4px; overflow-wrap: anywhere; }
 .trick-empty { width: 100%; text-align: center; opacity: 0.75; font-size: 16px; padding-top: 40px; }
 
 /* Hand fan at the bottom */
 .hand-zone { margin-top: 8px; }
 .hand-zone h3 { margin: 4px 0 0; font-size: 17px; color: var(--gold-soft); text-align: center; }
 .fan { display: flex; justify-content: center; align-items: flex-end;
-  padding: 26px 8px 8px; min-height: 190px; }
-.fan .card { width: 92px; flex: 0 0 auto; margin-left: -34px; cursor: pointer;
+  padding: 26px 8px 8px; min-height: 190px; max-width: 100%; }
+.fan .card { width: var(--card-w); flex: 0 0 auto; margin-left: calc(var(--card-w) * -0.37); cursor: pointer;
   transform: rotate(var(--r, 0deg)); transform-origin: 50% 130%;
-  transition: transform 0.15s ease, margin 0.15s ease; }
+  transition: transform 0.15s ease, margin 0.15s ease;
+  user-select: none; -webkit-user-select: none; }
 .fan .card:first-child { margin-left: 0; }
 .fan .card img { width: 100%; display: block; border-radius: 9px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5); }
@@ -114,10 +130,11 @@ details.rules ol { padding-left: 20px; margin: 8px 0; }
 .fan .card.playable:hover { transform: rotate(var(--r, 0deg)) translateY(-10px); }
 .fan .card.disabled { opacity: 0.45; filter: grayscale(0.5); cursor: not-allowed; }
 .fan.readonly .card { cursor: default; }
-.fan.small .card { width: 76px; margin-left: -26px; }
+.fan.small .card { width: calc(var(--card-w) * 0.84); margin-left: calc(var(--card-w) * -0.31); }
 .fan.small { min-height: 160px; padding-top: 18px; }
 
 .play-row { text-align: center; }
+.play-row .btn { max-width: 340px; margin-left: auto; margin-right: auto; }
 
 /* Result */
 .winner-banner { text-align: center; background: var(--gold); color: #231a02;
@@ -136,7 +153,7 @@ table.result tr.winner-row td { font-weight: 800; color: var(--gold-soft); }
 .series-winner { text-align: center; background: var(--gold); color: #231a02;
   border-radius: 12px; padding: 10px; font-size: 18px; font-weight: 800; margin-bottom: 10px; }
 
-.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+.toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
   background: #111827; color: #fff; border: 1px solid var(--gold);
   padding: 12px 18px; border-radius: 12px; font-size: 17px; z-index: 50;
   max-width: 92vw; text-align: center; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5); }
@@ -155,7 +172,61 @@ table.result tr.winner-row td { font-weight: 800; color: var(--gold-soft); }
 .chat-controls input[type="text"] { flex: 1; min-width: 0; font-size: 17px; padding: 10px 12px; text-align: left; }
 .btn.send { margin-top: 0; flex: 0 0 auto; }
 
+/* ---- Small phones: 7-card hand must fit in ~336px ---- */
 @media (max-width: 380px) {
-  .fan .card { width: 80px; margin-left: -30px; }
+  :root { --card-w: 64px; --trick-w: 58px; }
+  .fan .card { margin-left: -20px; }
+  .fan.small .card { margin-left: -18px; }
   header h1 { font-size: 28px; }
+  .app { padding-left: 10px; padding-right: 10px; }
+  .screen { padding: 12px; }
+  .turn-banner { font-size: 18px; }
+  .code-big { font-size: 34px; letter-spacing: 6px; }
+}
+
+/* ---- Tablet: wider column, bigger cards, topbar fits without scroll ---- */
+@media (min-width: 700px) {
+  :root { --card-w: 108px; --trick-w: 96px; }
+  .app { max-width: 780px; padding: 16px 20px 32px; }
+  header h1 { font-size: 40px; }
+  .screen { padding: 20px; }
+  .topbar { overflow-x: visible; }
+  .chip { flex: 1 1 0; min-width: 0; text-align: center; }
+  .trick-area { min-height: 180px; }
+  .fan { min-height: 220px; }
+  .fan.small { min-height: 190px; }
+  .chat-list { max-height: 300px; }
+}
+
+/* ---- Laptop / desktop: wide table, chat beside the table ---- */
+@media (min-width: 1024px) {
+  .app { max-width: 1080px; padding: 20px 24px 40px; }
+  header h1 { font-size: 44px; }
+  header .sub { font-size: 17px; }
+  /* Forms stay narrow and centred so buttons don't stretch full-width */
+  #screen-home, #screen-lobby, #screen-target, #screen-result { max-width: 640px; margin-left: auto; margin-right: auto; }
+  #screen-target .fan.small { --card-w: 92px; }
+  /* Table takes the full width: game on the left, chat on the right */
+  #screen-table { max-width: none; }
+  .table-layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; align-items: start; }
+  .table-main { min-width: 0; }
+  .chat-panel { margin-top: 0; border-top: none; border-left: 1px solid rgba(255, 255, 255, 0.16); padding-top: 0; padding-left: 20px; position: sticky; top: 16px; }
+  .chat-panel h3 { text-align: left; }
+  .chat-list { max-height: 420px; }
+  :root { --card-w: 120px; --trick-w: 110px; }
+  .fan { min-height: 240px; padding-top: 30px; }
+  .trick-area { min-height: 200px; padding: 16px 0; }
+  .turn-banner { font-size: 22px; }
+  .chip .nm { font-size: 17px; }
+  .chip .sc { font-size: 15px; }
+}
+
+/* ---- Landscape phone: keep hand + play button on screen ---- */
+@media (max-height: 500px) and (orientation: landscape) {
+  .fan { min-height: 150px; padding-top: 14px; }
+  .fan.small { min-height: 130px; }
+  .trick-area { min-height: 110px; padding: 6px 0; }
+  .chat-list { max-height: 180px; }
+  header { margin: 2px 0 6px; }
+  header h1 { font-size: 26px; }
 }

@@ -89,25 +89,29 @@
 
   <!-- ============ TABLE ============ -->
   <section id="screen-table" class="screen" hidden>
-    <div class="topbar" id="topBar"></div>
-    <div class="turn-banner" id="turnBanner">অপেক্ষা করুন…</div>
-    <p class="turn-sub" id="turnSub"></p>
-    <div class="trick-area" id="trickArea"></div>
-    <div class="hand-zone">
-      <h3>আপনার হাতের কার্ড</h3>
-      <div class="fan" id="myHand"></div>
-      <div class="play-row">
-        <button class="btn" id="btnPlay" disabled>এই কার্ডটি খেলুন</button>
+    <div class="table-layout">
+      <div class="table-main">
+        <div class="topbar" id="topBar"></div>
+        <div class="turn-banner" id="turnBanner">অপেক্ষা করুন…</div>
+        <p class="turn-sub" id="turnSub"></p>
+        <div class="trick-area" id="trickArea"></div>
+        <div class="hand-zone">
+          <h3>আপনার হাতের কার্ড</h3>
+          <div class="fan" id="myHand"></div>
+          <div class="play-row">
+            <button class="btn" id="btnPlay" disabled>এই কার্ডটি খেলুন</button>
+          </div>
+        </div>
       </div>
-    </div>
-    <div class="chat-panel" id="chatPanel">
-      <h3>💬 Boyz Chat</h3>
-      <div class="chat-list" id="chatList"></div>
-      <div class="chat-controls">
-        <input type="text" id="chatInput" placeholder="মেসেজ লিখুন…" maxlength="200" autocomplete="off">
-        <button class="btn small send" id="btnSend">পাঠান</button>
+      <div class="chat-panel" id="chatPanel">
+        <h3>💬 Boyz Chat</h3>
+        <div class="chat-list" id="chatList"></div>
+        <div class="chat-controls">
+          <input type="text" id="chatInput" placeholder="মেসেজ লিখুন…" maxlength="200" autocomplete="off">
+          <button class="btn small send" id="btnSend">পাঠান</button>
+        </div>
+        <p class="hint">রুমে শেষ ২০টা মেসেজ থাকবে</p>
       </div>
-      <p class="hint">রুমে শেষ ২০টা মেসেজ থাকবে</p>
     </div>
   </section>
 
