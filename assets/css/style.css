@@ -102,6 +102,16 @@ details.rules ol { padding-left: 20px; margin: 8px 0; }
 .turn-banner.my-turn { background: var(--gold); color: #231a02; }
 .turn-sub { text-align: center; font-size: 15px; opacity: 0.9; margin: 0 0 8px; }
 
+/* Live voice bar (Boyz Chat voice, table screen) */
+.voice-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; margin: 4px 0 8px; }
+.voice-bar .btn { margin-top: 0; width: auto; }
+.btn.mic-off { background: transparent; border: 2px solid var(--gold-soft); color: var(--gold-soft); }
+.btn.mic-on { background: #16a34a; border: 2px solid #86efac; color: #fff; }
+.mic-status { font-size: 14px; opacity: 0.9; text-align: center; }
+#voiceAudio { display: none; }
+.chip.speaking { border-color: #4ade80; box-shadow: 0 0 0 2px #4ade80; }
+.spk-btn { margin-top: 6px; font-size: 13px; padding: 4px 10px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.35); background: rgba(255,255,255,0.10); color: var(--ivory); cursor: pointer; font-family: inherit; }
+
 /* Centre: played cards of the current trick */
 .trick-area { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;
   min-height: 150px; align-items: flex-start; padding: 10px 0; }

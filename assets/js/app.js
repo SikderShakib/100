@@ -12,6 +12,7 @@ import {
   CARD_BY_ID, deckFor, shuffleDeck, deal, trickWinner, scoreOf, computeResults,
   seriesDelta, seriesWinnerId, bn,
 } from './cards.js';
+import { voiceLive, SIGNAL_KEEP } from './voice-live.js';
 
 // ---------- setup ----------
 const CONFIGURED = !!(
@@ -31,6 +32,10 @@ let selectedCard = null;
 let resolving = false;
 let playing = false;      // a play write is in flight
 let toastTimer = null;
+// Live voice state (WebRTC, room-doc signalling).
+let voiceReady = false;
+let prevOrder = [];
+const speakingPeers = new Set();
 
 function toast(msg) {
   const t = $('toast');
@@ -54,6 +59,77 @@ function initFirebase() {
 }
 
 const roomRef = () => doc(db, 'rooms', roomCode);
+
+// ---------- Boyz Chat: LIVE voice (WebRTC, no recording) ----------
+function initVoiceLive() {
+  if (voiceReady || !myId) return;
+  voiceReady = true;
+  voiceLive.init({
+    myId,
+    getPeerIds: () => (room ? room.order.filter((pid) => pid !== myId) : []),
+    audioContainer: $('voiceAudio') || document.body,
+    sendSignal: async (signal) => {
+      if (!roomCode || !db) return;
+      try {
+        await runTransaction(db, async (tx) => {
+          const snap = await tx.get(roomRef());
+          if (!snap.exists()) return;
+          const arr = [...(snap.data().voiceSignals || []), signal].slice(-SIGNAL_KEEP);
+          tx.update(roomRef(), { voiceSignals: arr });
+        });
+      } catch (e) { console.error('voice signal send failed', e); }
+    },
+    onMicState: (micOn) => {
+      if (!roomCode || !db) return;
+      updateDoc(roomRef(), { ['voiceMic.' + myId]: micOn }).catch(() => {});
+      updateMicUI();
+    },
+    onSpeaking: (peerId, speaking) => {
+      const key = peerId === 'me' ? myId : peerId;
+      if (speaking) speakingPeers.add(key);
+      else speakingPeers.delete(key);
+      updateSpeakingUI();
+    },
+    onStatus: (msg) => {
+      if (msg && msg.startsWith('voice-connect-failed:')) {
+        toast('লাইভ ভয়েসে একজনের সাথে কানেক্ট হচ্ছে না — নেটওয়ার্ক চেক করুন।');
+      }
+    },
+  });
+}
+
+function updateMicUI() {
+  const btn = $('btnMic');
+  const st = $('micStatus');
+  if (!btn || !st) return;
+  const on = voiceLive.isMicOn();
+  btn.textContent = on ? '🔇 Mic বন্ধ করুন' : '🎙️ Mic চালু করুন';
+  btn.classList.toggle('mic-on', on);
+  btn.classList.toggle('mic-off', !on);
+  st.textContent = on ? 'Mic চালু — সবাই আপনাকে শুনছে' : 'Mic বন্ধ — কথা শুনতে হলে Mic চালু করুন';
+}
+
+function updateSpeakingUI() {
+  for (const chip of document.querySelectorAll('.chip[data-pid]')) {
+    chip.classList.toggle('speaking', speakingPeers.has(chip.dataset.pid));
+  }
+}
+
+async function toggleMicHandler() {
+  const btn = $('btnMic');
+  if (btn) btn.disabled = true;
+  try {
+    const on = await voiceLive.toggleMic();
+    toast(on ? 'Mic চালু হয়েছে — সবাই শুনছে।' : 'Mic বন্ধ হয়েছে।');
+    updateMicUI();
+  } catch (e) {
+    console.error('mic failed', e);
+    if (e && e.name === 'NotAllowedError') toast('Mic চালু করতে অনুমতি দিন — ব্রাউজারে Allow চাপুন।');
+    else if (e && e.message === 'mic-not-supported') toast('এই ব্রাউজারে Mic চলবে না — Chrome ব্যবহার করুন।');
+    else toast('Mic চালু হয়নি, আবার চেষ্টা করুন।');
+  }
+  if (btn) btn.disabled = false;
+}
 
 function saveSession() {
   sessionStorage.setItem('c100', JSON.stringify({ code: roomCode, id: myId, name: myName }));
@@ -102,6 +178,8 @@ async function createRoom() {
       seriesTarget: 1000,
       seriesWinnerId: null,
       chat: [],
+      voiceSignals: [],
+      voiceMic: {},
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -153,6 +231,16 @@ function attachListener() {
     if (!room.players[myId]) { toast('আপনি আর এই রুমে নেই।'); leaveToHome(); return; }
     isHost = !!room.players[myId].isHost;
     render();
+    // Live voice: init once, feed fresh signals, offer to newcomers.
+    initVoiceLive();
+    voiceLive.handleSignals(room.voiceSignals || []);
+    const newPeers = (room.order || []).filter((pid) => pid !== myId && !prevOrder.includes(pid));
+    if (newPeers.length && voiceLive.isMicOn()) {
+      voiceLive.offerToPeers(newPeers).catch(() => {});
+    }
+    prevOrder = [...(room.order || [])];
+    updateMicUI();
+    updateSpeakingUI();
     // Host flips target -> playing once every target is in.
     if (room.status === 'target' && isHost &&
         room.order.every((pid) => room.players[pid].target != null)) {
@@ -174,6 +262,10 @@ function attachListener() {
 
 function leaveToHome() {
   if (unsub) { unsub(); unsub = null; }
+  try { voiceLive.cleanup(); } catch (e) {}
+  voiceReady = false;
+  prevOrder = [];
+  speakingPeers.clear();
   clearSession();
   room = null; roomCode = null; myId = null; isHost = false; selectedCard = null;
   showScreen('home');
@@ -502,9 +594,12 @@ function renderTable() {
     const tricks = Math.floor((p.won || []).length / room.order.length);
     const chip = document.createElement('div');
     chip.className = 'chip' + (pid === myId ? ' me' : '');
+    chip.dataset.pid = pid;
+    if (speakingPeers.has(pid)) chip.classList.add('speaking');
     const nm = document.createElement('div');
     nm.className = 'nm';
-    nm.textContent = p.name + (pid === myId ? ' (আপনি)' : '');
+    const micOn = !!(room.voiceMic || {})[pid];
+    nm.textContent = (micOn ? '🎙️ ' : '🔇 ') + p.name + (pid === myId ? ' (আপনি)' : '');
     const sc = document.createElement('div');
     sc.className = 'sc';
     sc.innerHTML = '';
@@ -517,6 +612,20 @@ function renderTable() {
     sc.appendChild(document.createTextNode(' • সিরিজ ' + bn(seriesTotal)));
     chip.appendChild(nm);
     chip.appendChild(sc);
+    // Remote speaker mute (local only — mutes them just on your phone).
+    if (pid !== myId) {
+      const spk = document.createElement('button');
+      spk.className = 'spk-btn';
+      spk.type = 'button';
+      const muted = voiceLive.isPeerMuted(pid);
+      spk.textContent = muted ? '🔇 শুনছি না' : '🔊 শুনছি';
+      spk.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const nowMuted = voiceLive.setPeerMuted(pid, !voiceLive.isPeerMuted(pid));
+        spk.textContent = nowMuted ? '🔇 শুনছি না' : '🔊 শুনছি';
+      });
+      chip.appendChild(spk);
+    }
     bar.appendChild(chip);
   }
 
@@ -588,6 +697,8 @@ function renderTable() {
   playBtn.textContent = selectedCard ? 'এই কার্ডটি খেলুন' : 'একটি কার্ড বাছুন';
 
   renderChat();
+  updateMicUI();
+  updateSpeakingUI();
 }
 
 function renderResult() {
@@ -690,6 +801,7 @@ $('btnStart').addEventListener('click', () => { startGame().catch((e) => { conso
 $('btnLeaveLobby').addEventListener('click', leaveToHome);
 $('btnTarget').addEventListener('click', () => { submitTarget().catch((e) => { console.error(e); toast('টার্গেট জমা হয়নি।'); }); });
 $('btnPlay').addEventListener('click', () => { if (selectedCard) playCard(selectedCard); });
+$('btnMic').addEventListener('click', () => { toggleMicHandler().catch((e) => { console.error(e); toast('Mic চালু হয়নি।'); }); });
 $('btnSend').addEventListener('click', () => { sendTextMessage().catch((e) => { console.error(e); toast('মেসেজ পাঠানো যায়নি।'); }); });
 $('chatInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendTextMessage(); } });
 $('btnAgain').addEventListener('click', () => { playAgain().catch((e) => { console.error(e); toast('আবার খেলা শুরু হয়নি।'); }); });

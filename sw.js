@@ -1,7 +1,7 @@
 /* 100 Cards — service worker (PWA install, like OTW).
    Bump CACHE on EVERY deploy that changes a served file,
    or phones stay stuck on the old code. */
-const CACHE = 'cards-100-v2';
+const CACHE = 'cards-100-v3';
 const SHELL = [
   './',
   './index.html',
@@ -9,6 +9,7 @@ const SHELL = [
   './assets/css/style.css',
   './assets/js/app.js',
   './assets/js/cards.js',
+  './assets/js/voice-live.js',
   './assets/js/firebase-config.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
