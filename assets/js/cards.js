@@ -76,12 +76,13 @@ export function computeResults(players) {
 }
 
 /** Series (running-total) scoring across matches in one room.
- *  A player who met their target adds their match score to their total;
- *  a player who missed it loses their TARGET from their total.
+ *  A player who met their target adds only their TARGET to their total —
+ *  scoring above the target gives no extra benefit.
+ *  A player who missed it loses their TARGET from their total.
  *  Totals may go negative. */
 export function seriesDelta(target, score) {
   const met = target != null && score >= target;
-  return met ? score : -(target ?? 0);
+  return met ? target : -(target ?? 0);
 }
 
 /** Series winner: the player whose total reaches the series target.

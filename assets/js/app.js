@@ -371,7 +371,7 @@ async function resolveTrick() {
             : [...(r.players[pid].won || [])],
         }));
         const { winnerId: finalWinner } = computeResults(finalPlayers);
-        // Series totals: met target -> +match score, missed -> -target.
+        // Series totals: met target -> +target only, missed -> -target.
         const totals = { ...(r.totals || {}) };
         const matchScores = {};
         for (const fp of finalPlayers) {

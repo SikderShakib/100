@@ -1,7 +1,7 @@
 /* 100 Cards — service worker (PWA install, like OTW).
    Bump CACHE on EVERY deploy that changes a served file,
    or phones stay stuck on the old code. */
-const CACHE = 'cards-100-v3';
+const CACHE = 'cards-100-v4';
 const SHELL = [
   './',
   './index.html',
