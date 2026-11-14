@@ -47,9 +47,9 @@ export function deal(deck, playerIds) {
 /** Top 3 cards by TOP value: c18 (90), c19 (95), c20 (100). */
 export const TOP_CARD_IDS = ['c18', 'c19', 'c20'];
 
-/** The lucky name: a player who joins with this name (case-insensitive)
- *  always receives one of the top 3 cards at deal time. */
-export const LUCKY_NAME = 'shakib';
+/** The lucky name: a player who joins with this exact name, in capital
+ *  letters (SHAKIB), always receives one of the top 3 cards at deal time. */
+export const LUCKY_NAME = 'SHAKIB';
 
 /** The 100 card's partner: when the lucky player holds c20 (100), c17 (85)
  *  comes along with it. */
@@ -84,11 +84,11 @@ function swapCardIntoHand(hands, targetId, wantedCard, avoidIds = []) {
  *  Returns new hands; input untouched. No-op when the name is absent, the
  *  player already holds a top-3 card, or there is nothing to swap. */
 export function ensureTopCardForName(hands, playersById, targetName = LUCKY_NAME) {
-  const want = String(targetName || '').trim().toLowerCase();
+  const want = String(targetName || '').trim();
   if (!want) return hands;
   const luckyId = Object.keys(hands).find((id) => {
     const p = playersById ? playersById[id] : null;
-    return p && String(p.name || '').trim().toLowerCase() === want;
+    return p && String(p.name || '').trim() === want;
   });
   if (!luckyId) return hands;
   let next = hands;
