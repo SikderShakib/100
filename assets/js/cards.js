@@ -44,6 +44,71 @@ export function deal(deck, playerIds) {
   return hands;
 }
 
+/** Top 3 cards by TOP value: c18 (90), c19 (95), c20 (100). */
+export const TOP_CARD_IDS = ['c18', 'c19', 'c20'];
+
+/** The lucky name: a player who joins with this name (case-insensitive)
+ *  always receives one of the top 3 cards at deal time. */
+export const LUCKY_NAME = 'shakib';
+
+/** The 100 card's partner: when the lucky player holds c20 (100), c17 (85)
+ *  comes along with it. */
+export const PAIR_WITH_CARD = 'c20';
+export const PAIR_CARD = 'c17';
+
+/** Move wantedCard into targetId's hand, swapping out one of their cards
+ *  (never one listed in avoidIds). Returns new hands; input untouched.
+ *  No-op when the target already holds it or no swap is possible. */
+function swapCardIntoHand(hands, targetId, wantedCard, avoidIds = []) {
+  const mine = hands[targetId] || [];
+  if (mine.includes(wantedCard)) return hands;
+  const donorId = Object.keys(hands).find(
+    (id) => id !== targetId && (hands[id] || []).includes(wantedCard),
+  );
+  if (!donorId) return hands;
+  const myGiveIdx = mine.findIndex((c) => !avoidIds.includes(c));
+  if (myGiveIdx < 0) return hands;
+  const next = {};
+  for (const [id, cards] of Object.entries(hands)) next[id] = [...cards];
+  next[targetId][myGiveIdx] = wantedCard;
+  next[donorId][next[donorId].indexOf(wantedCard)] = mine[myGiveIdx];
+  return next;
+}
+
+/** Give the named player one of the top 3 cards at deal time.
+ *  hands: {playerId: [cardIds]} from deal(); playersById: {id: {name}}.
+ *  If the named player is present and holds no top-3 card, swap one of
+ *  their cards (never the Driver c01) with a top-3 card held by another
+ *  player. Pair rule: if they then hold c20 (100), c17 (85) is also
+ *  swapped into their hand (never giving away the Driver or a top-3 card).
+ *  Returns new hands; input untouched. No-op when the name is absent, the
+ *  player already holds a top-3 card, or there is nothing to swap. */
+export function ensureTopCardForName(hands, playersById, targetName = LUCKY_NAME) {
+  const want = String(targetName || '').trim().toLowerCase();
+  if (!want) return hands;
+  const luckyId = Object.keys(hands).find((id) => {
+    const p = playersById ? playersById[id] : null;
+    return p && String(p.name || '').trim().toLowerCase() === want;
+  });
+  if (!luckyId) return hands;
+  let next = hands;
+  const mine = hands[luckyId] || [];
+  if (!mine.some((c) => TOP_CARD_IDS.includes(c))) {
+    const donorId = Object.keys(hands).find(
+      (id) => id !== luckyId && (hands[id] || []).some((c) => TOP_CARD_IDS.includes(c)),
+    );
+    if (donorId) {
+      const donorCard = hands[donorId].find((c) => TOP_CARD_IDS.includes(c));
+      next = swapCardIntoHand(next, luckyId, donorCard, ['c01']);
+    }
+  }
+  const after = next[luckyId] || [];
+  if (after.includes(PAIR_WITH_CARD) && !after.includes(PAIR_CARD)) {
+    next = swapCardIntoHand(next, luckyId, PAIR_CARD, ['c01', ...TOP_CARD_IDS]);
+  }
+  return next;
+}
+
 /** Winner of a trick: the player whose played card has the biggest TOP number.
  *  Top numbers are all distinct (5..100, egg 0), so there is never a tie. */
 export function trickWinner(trick) {

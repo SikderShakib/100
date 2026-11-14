@@ -9,7 +9,8 @@ import {
 } from 'firebase/firestore';
 import { firebaseConfig } from './firebase-config.js';
 import {
-  CARD_BY_ID, deckFor, shuffleDeck, deal, trickWinner, scoreOf, computeResults,
+  CARD_BY_ID, deckFor, shuffleDeck, deal, ensureTopCardForName,
+  trickWinner, scoreOf, computeResults,
   seriesDelta, seriesWinnerId, bn,
 } from './cards.js';
 import { voiceLive, SIGNAL_KEEP } from './voice-live.js';
@@ -277,7 +278,7 @@ async function startGame() {
   const n = room.order.length;
   if (n < 3 || n > 4) { toast('৩–৪ জন হলে খেলা শুরু করা যাবে।'); return; }
   const deck = shuffleDeck(deckFor(n));
-  const hands = deal(deck, room.order);
+  const hands = ensureTopCardForName(deal(deck, room.order), room.players);
   const leader = room.order.find((pid) => hands[pid].includes('c01'));
   await updateDoc(roomRef(), {
     status: 'target',
