@@ -191,12 +191,16 @@ async function createRoom() {
   toast('রুম তৈরি হয়নি, আবার চেষ্টা করুন।');
 }
 
+let joining = false;
 async function joinRoom() {
+  if (joining) return;
   const name = $('nameInput').value.trim();
   const code = $('codeInput').value.trim().toUpperCase();
   if (!name) { $('homeError').textContent = 'আপনার নাম লিখুন।'; return; }
   if (!code) { $('homeError').textContent = 'রুম কোড লিখুন।'; return; }
   if (!CONFIGURED) { toast('Firebase কনফিগ এখনো বসানো হয়নি।'); return; }
+  joining = true;
+  try {
   $('homeError').textContent = '';
   myName = name;
   myId = newPlayerId();
@@ -221,6 +225,9 @@ async function joinRoom() {
   });
   saveSession();
   attachListener();
+  } finally {
+    joining = false;
+  }
 }
 
 // ---------- realtime listener ----------
@@ -772,6 +779,9 @@ function renderResult() {
 // ---------- wire up ----------
 $('btnCreate').addEventListener('click', () => { createRoom().catch((e) => { console.error(e); toast('রুম তৈরি হয়নি।'); }); });
 $('btnJoin').addEventListener('click', () => { joinRoom().catch((e) => { console.error(e); toast('যোগ দেওয়া যায়নি।'); }); });
+$('nameInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); joinRoom().catch((err) => { console.error(err); toast('যোগ দেওয়া যায়নি।'); }); }
+});
 function inviteUrl() {
   return location.origin + location.pathname + '?room=' + roomCode;
 }
@@ -815,15 +825,6 @@ if (!CONFIGURED) {
 const savedName = localStorage.getItem('c100-name');
 if (savedName) $('nameInput').value = savedName;
 
-// Invite link: ?room=ABCD pre-fills the join code.
-const inviteCode = (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z]/g, '');
-if (inviteCode.length === 4) {
-  $('codeInput').value = inviteCode;
-  const hint = $('inviteHint');
-  hint.textContent = 'রুম ' + inviteCode + '-এ আমন্ত্রণ পেয়েছেন — নাম লিখে "রুমে যোগ দিন" চাপুন।';
-  hint.hidden = false;
-}
-
 // PWA: register the service worker (installable like OTW).
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -838,4 +839,24 @@ if (saved && saved.code && saved.id && CONFIGURED) {
   myName = saved.name || '';
   initFirebase();
   attachListener(); // isHost is re-derived from the room doc on each snapshot
+}
+
+// Invite link: ?room=ABCD — direct entry, no second click.
+// Returning player (saved name) joins straight into the lobby;
+// a first-timer just types their name and hits Enter.
+const inviteCode = (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z]/g, '');
+if (inviteCode.length === 4) {
+  $('codeInput').value = inviteCode;
+  if (!saved) {
+    const hint = $('inviteHint');
+    if ($('nameInput').value.trim() && CONFIGURED) {
+      hint.textContent = 'রুম ' + inviteCode + '-এ ঢুকছেন…';
+      hint.hidden = false;
+      joinRoom().catch((e) => { console.error(e); toast('যোগ দেওয়া যায়নি।'); });
+    } else {
+      hint.textContent = 'রুম ' + inviteCode + '-এ আমন্ত্রণ পেয়েছেন — নাম লিখে Enter চাপুন।';
+      hint.hidden = false;
+      $('nameInput').focus();
+    }
+  }
 }
