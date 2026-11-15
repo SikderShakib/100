@@ -72,6 +72,13 @@
     <button class="btn small secondary" id="btnCopyLink">🔗 লিংক কপি করুন</button>
     <ul class="player-list" id="lobbyPlayers"></ul>
     <p class="hint" id="lobbyNote">৩–৪ জন হলে খেলা শুরু করা যাবে।</p>
+    <div id="lobbyJoinBox" hidden>
+      <p class="hint">রুমে ঢুকে গেছেন — এবার আপনার নাম লিখুন।</p>
+      <label for="lobbyNameInput">আপনার নাম</label>
+      <input type="text" id="lobbyNameInput" placeholder="যেমন: শাকিব" maxlength="20" autocomplete="off">
+      <button class="btn" id="btnLobbyJoin">নাম দিয়ে যোগ দিন</button>
+      <div class="error" id="lobbyJoinError"></div>
+    </div>
     <button class="btn" id="btnStart" disabled>খেলা শুরু করুন</button>
     <button class="btn secondary" id="btnLeaveLobby">রুম ছেড়ে যান</button>
   </section>

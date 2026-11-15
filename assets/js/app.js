@@ -230,6 +230,90 @@ async function joinRoom() {
   }
 }
 
+// ---------- invite preview: see the room first, name inside ----------
+// A player opening ?room=CODE lands straight in the lobby and types their
+// name there. Until they join, this is a read-only preview (no player entry,
+// no voice, no chat) — the room doc is only watched, never written.
+let previewing = false;
+let previewUnsub = null;
+
+function attachPreviewListener(code) {
+  roomCode = code;
+  myId = null;
+  myName = '';
+  isHost = false;
+  initFirebase();
+  previewing = true;
+  const savedName = localStorage.getItem('c100-name');
+  if (savedName) $('lobbyNameInput').value = savedName;
+  $('roomCodeBig').textContent = code;
+  $('lobbyJoinBox').hidden = false;
+  showScreen('lobby');
+  previewUnsub = onSnapshot(doc(db, 'rooms', code), (snap) => {
+    if (!snap.exists()) {
+      stopPreview();
+      $('homeError').textContent = 'এই কোডের কোনো রুম পাওয়া যায়নি।';
+      showScreen('home');
+      return;
+    }
+    room = snap.data();
+    if (room.status !== 'lobby') {
+      stopPreview();
+      $('homeError').textContent = 'এই রুমের খেলা ইতিমধ্যে শুরু হয়ে গেছে।';
+      showScreen('home');
+      return;
+    }
+    render();
+  }, (err) => {
+    console.error('preview listener error', err);
+    stopPreview();
+    $('homeError').textContent = 'রুমটি দেখা যায়নি — আবার চেষ্টা করুন।';
+    showScreen('home');
+  });
+  $('lobbyNameInput').focus();
+}
+
+function stopPreview() {
+  if (previewUnsub) { previewUnsub(); previewUnsub = null; }
+  previewing = false;
+  room = null; roomCode = null;
+  $('lobbyJoinBox').hidden = true;
+}
+
+async function joinFromLobby() {
+  if (!previewing || !room) return;
+  if (joining) return;
+  const name = $('lobbyNameInput').value.trim();
+  if (!name) { $('lobbyJoinError').textContent = 'আপনার নাম লিখুন।'; return; }
+  $('lobbyJoinError').textContent = '';
+  if (room.status !== 'lobby') { $('lobbyJoinError').textContent = 'এই রুমের খেলা ইতিমধ্যে শুরু হয়ে গেছে।'; return; }
+  if (room.order.length >= 4) { $('lobbyJoinError').textContent = 'রুম ভর্তি (৪ জন হয়ে গেছে)।'; return; }
+  const taken = room.order.some((pid) => room.players[pid].name.toLowerCase() === name.toLowerCase());
+  if (taken) { $('lobbyJoinError').textContent = 'এই নামে একজন ইতিমধ্যে রুমে আছেন।'; return; }
+  joining = true;
+  try {
+    myName = name;
+    myId = newPlayerId();
+    isHost = false;
+    localStorage.setItem('c100-name', name);
+    await updateDoc(doc(db, 'rooms', roomCode), {
+      ['players.' + myId]: { id: myId, name, isHost: false, target: null, won: [] },
+      order: arrayUnion(myId),
+      updatedAt: serverTimestamp(),
+    });
+    if (previewUnsub) { previewUnsub(); previewUnsub = null; }
+    previewing = false;
+    $('lobbyJoinBox').hidden = true;
+    saveSession();
+    attachListener();
+  } catch (e) {
+    console.error(e);
+    $('lobbyJoinError').textContent = 'যোগ দেওয়া যায়নি — আবার চেষ্টা করুন।';
+  } finally {
+    joining = false;
+  }
+}
+
 // ---------- realtime listener ----------
 function attachListener() {
   if (unsub) unsub();
@@ -270,12 +354,15 @@ function attachListener() {
 
 function leaveToHome() {
   if (unsub) { unsub(); unsub = null; }
+  if (previewUnsub) { previewUnsub(); previewUnsub = null; }
+  previewing = false;
   try { voiceLive.cleanup(); } catch (e) {}
   voiceReady = false;
   prevOrder = [];
   speakingPeers.clear();
   clearSession();
   room = null; roomCode = null; myId = null; isHost = false; selectedCard = null;
+  $('lobbyJoinBox').hidden = true;
   showScreen('home');
 }
 
@@ -538,6 +625,7 @@ function renderLobby() {
   const startBtn = $('btnStart');
   startBtn.disabled = !(isHost && n >= 3 && n <= 4);
   startBtn.textContent = isHost ? 'খেলা শুরু করুন' : 'হোস্ট খেলা শুরু করবেন…';
+  $('lobbyJoinBox').hidden = !previewing;
 }
 
 function renderFan(container, cardIds, opts = {}) {
@@ -779,6 +867,10 @@ function renderResult() {
 // ---------- wire up ----------
 $('btnCreate').addEventListener('click', () => { createRoom().catch((e) => { console.error(e); toast('রুম তৈরি হয়নি।'); }); });
 $('btnJoin').addEventListener('click', () => { joinRoom().catch((e) => { console.error(e); toast('যোগ দেওয়া যায়নি।'); }); });
+$('btnLobbyJoin').addEventListener('click', () => { joinFromLobby().catch((e) => { console.error(e); toast('যোগ দেওয়া যায়নি।'); }); });
+$('lobbyNameInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); joinFromLobby().catch((err) => { console.error(err); toast('যোগ দেওয়া যায়নি।'); }); }
+});
 $('nameInput').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); joinRoom().catch((err) => { console.error(err); toast('যোগ দেওয়া যায়নি।'); }); }
 });
@@ -841,21 +933,21 @@ if (saved && saved.code && saved.id && CONFIGURED) {
   attachListener(); // isHost is re-derived from the room doc on each snapshot
 }
 
-// Invite link: ?room=ABCD — direct entry, no second click.
-// Returning player (saved name) joins straight into the lobby;
-// a first-timer just types their name and hits Enter.
+// Invite link: ?room=ABCD — straight into the room, name typed inside.
+// Returning player (saved name) joins at once; a first-timer sees the
+// lobby first and types their name there.
 const inviteCode = (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z]/g, '');
 if (inviteCode.length === 4) {
   $('codeInput').value = inviteCode;
   if (!saved) {
     const hint = $('inviteHint');
+    hint.textContent = 'রুম ' + inviteCode + '-এ আমন্ত্রণ পেয়েছেন।';
+    hint.hidden = false;
     if ($('nameInput').value.trim() && CONFIGURED) {
-      hint.textContent = 'রুম ' + inviteCode + '-এ ঢুকছেন…';
-      hint.hidden = false;
       joinRoom().catch((e) => { console.error(e); toast('যোগ দেওয়া যায়নি।'); });
+    } else if (CONFIGURED) {
+      attachPreviewListener(inviteCode);
     } else {
-      hint.textContent = 'রুম ' + inviteCode + '-এ আমন্ত্রণ পেয়েছেন — নাম লিখে Enter চাপুন।';
-      hint.hidden = false;
       $('nameInput').focus();
     }
   }
